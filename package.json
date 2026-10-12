@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev --port 8787",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/prepare-notices.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy",

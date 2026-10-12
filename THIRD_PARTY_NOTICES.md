@@ -157,3 +157,23 @@ license/NOTICE files when redistributing packages or compiled bundles.
 | yargs | 17.7.3 | MIT |
 | yauzl | 2.10.0 | MIT |
 | postal-mime | 4.0.5 | MIT-0 |
+
+## HEIC decoder source and replacement
+
+`heic-to` 1.6.5 is LGPL-3.0-or-later and includes libheif 1.23.5. Its upstream
+[source and build instructions](https://github.com/hoppergee/heic-to)
+and [libheif source](https://github.com/strukturag/libheif/tree/v1.23.5) remain
+under their upstream licenses. The exact published package, including wrapper
+sources, is available as [heic-to 1.6.5](https://registry.npmjs.org/heic-to/-/heic-to-1.6.5.tgz).
+The lockfile pins this release and integrity. See its README for decoder build
+instructions and codec dependencies. This project does not modify the decoder.
+
+To use a modified decoder, obtain the upstream source, build your replacement,
+point the `heic-to` dependency in `package.json` at that local package with
+`pnpm add heic-to@file:../your-heic-to`, and run `pnpm build`. Stack's MIT source
+is available to rebuild the combined application. Users may modify or reverse
+engineer the library portions for debugging those modifications under the
+upstream license. No additional restriction is imposed by Stack.
+
+Every build publishes this inventory, the Stack license and installed dependency
+license/NOTICE texts at `/THIRD_PARTY_NOTICES.md`, `/LICENSE.txt` and `/licenses/`.
