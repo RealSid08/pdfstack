@@ -1,67 +1,211 @@
-// Generates disposable samples and verifies the deployed contract using real curl uploads.
-// Run: node worker/verify-live.mjs [https://pdf.realsid08.me]
+// Production acceptance. Set VERIFY_ONLY to comma-separated filenames to rerun
+// failures; defaults cover distinct formats, with aliases tested locally.
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { zipSync, strToU8 } from 'fflate';
-import * as XLSX from 'xlsx';
 import { PDFDocument } from 'pdf-lib';
 import assert from 'node:assert/strict';
+import { samples } from './generate-samples.mjs';
 const base = process.argv[2] || 'https://pdf.realsid08.me';
 const dir = mkdtempSync(join(tmpdir(), 'pdf-realsid-verify-'));
-const word = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>DOCX acceptance sample</w:t></w:r></w:p></w:body></w:document>`;
-writeFileSync(join(dir, 'sample.docx'), zipSync({
-  '[Content_Types].xml': strToU8(`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`),
-  '_rels/.rels': strToU8(`<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`),
-  'word/document.xml': strToU8(word),
-}));
-const book = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Product', 'Quantity'], ['Apples', 3], ['Rice', 2]]), 'Groceries');
-XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Second sheet sample'], ['Page break verified']]), 'Notes');
-writeFileSync(join(dir, 'sample.xlsx'), XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }));
-const samples = {
-  md: '# Markdown acceptance sample\n\n**Bold** and a table.\n\n| Item | Count |\n|---|---|\n| Apples | 3 |\n',
-  txt: 'TXT acceptance sample\nLiteral <script>alert(1)</script> stays text.\n',
-  csv: 'Name,Count\n"CSV acceptance sample",3\n"Comma, inside",4\n',
-  json: '{"acceptance":"JSON acceptance sample","items":[1,2,3]}',
-  html: '<h1>HTML acceptance sample</h1><script>document.body.textContent="SCRIPT_EXECUTED"</script><iframe src="http://169.254.169.254/"></iframe><img src="https://example.com/tracker.png"><style>@import "https://example.com/style.css";</style><p>Safe content remains.</p>',
-};
-for (const [ext, text] of Object.entries(samples)) writeFileSync(join(dir, `sample.${ext}`), text);
-const health = JSON.parse(execFileSync('curl', ['-fsS', `${base}/api/health`], { encoding: 'utf8' }));
+const get = (path) =>
+  JSON.parse(
+    execFileSync('curl', ['-fsS', `${base}${path}`], { encoding: 'utf8' }),
+  );
+const health = get('/api/health'),
+  capabilities = get('/api/capabilities');
 assert.equal(health.ok, true);
-const capabilities = JSON.parse(execFileSync('curl', ['-fsS', `${base}/api/capabilities`], { encoding: 'utf8' }));
 assert.equal(capabilities.maxFileBytes, 26214400);
-console.log(JSON.stringify({ dir, health, capabilities }));
-for (const ext of ['docx', 'xlsx', ...Object.keys(samples)]) {
-  // Workers Free permits one new browser per 20 seconds for the whole account.
-  await new Promise((resolve) => setTimeout(resolve, 21000));
-  const output = join(dir, `${ext}.pdf`);
-  const headers = join(dir, `${ext}.headers`);
-  const status = execFileSync('curl', ['-sS', '--max-time', '45', '-D', headers, '-o', output, '-w', '%{http_code}', '-F', `file=@${join(dir, `sample.${ext}`)}`, '-F', `options=${JSON.stringify({ pageSize: ext === 'txt' ? 'Letter' : 'A4', landscape: ext === 'xlsx' })}`, `${base}/api/convert`], { encoding: 'utf8' });
-  assert.equal(status, '200', `${ext}: ${readFileSync(output).toString().slice(0, 400)}`);
-  const bytes = readFileSync(output);
-  assert.equal(bytes.subarray(0, 4).toString(), '%PDF');
-  assert.match(readFileSync(headers, 'utf8'), /content-type: application\/pdf/i);
-  const pdf = await PDFDocument.load(bytes);
-  assert.ok(pdf.getPageCount() > 0);
-  const text = execFileSync('pdftotext', [output, '-'], { encoding: 'utf8' });
-  assert.match(text, ext === 'xlsx' ? /Groceries/ : new RegExp(`${ext.toUpperCase() === 'MD' ? 'Markdown' : ext.toUpperCase()} acceptance sample`));
-  if (ext === 'html') assert.ok(!text.includes('SCRIPT_EXECUTED'));
-  if (ext === 'xlsx') { assert.equal(pdf.getPageCount(), 2); assert.ok(pdf.getPage(0).getWidth() > pdf.getPage(0).getHeight()); }
-  if (ext === 'txt') assert.equal(Math.round(pdf.getPage(0).getWidth()), 612);
-  console.log(JSON.stringify({ ext, bytes: bytes.length, pages: pdf.getPageCount(), width: pdf.getPage(0).getWidth(), height: pdf.getPage(0).getHeight() }));
+assert.equal(capabilities.textFallback, true);
+const fixtures = await samples(dir, capabilities.serverExtensions);
+assert.deepEqual(
+  fixtures
+    .filter((f) => f.name.startsWith('sample.'))
+    .map((f) => f.name.slice(7))
+    .sort(),
+  [...capabilities.serverExtensions].sort(),
+);
+console.log(
+  JSON.stringify({ dir, health, capabilities, fixtureCount: fixtures.length }),
+);
+const results = [];
+const aliases = new Set(
+  'htm markdown mht log jsx ts tsx css scss py rb go rs java c h cpp hpp cs php sh bash zsh sql yaml yml toml ini conf'.split(
+    ' ',
+  ),
+);
+
+let lastLaunch = 0;
+for (const fixture of fixtures) {
+  if (
+    !process.env.VERIFY_ALL_ALIASES &&
+    fixture.name.startsWith('sample.') &&
+    aliases.has(fixture.name.slice(7))
+  )
+    continue;
+  if (
+    process.env.VERIFY_ONLY &&
+    !process.env.VERIFY_ONLY.split(',').includes(fixture.name)
+  )
+    continue;
+  await new Promise((r) =>
+    setTimeout(r, Math.max(0, 21000 - (Date.now() - lastLaunch))),
+  );
+  const output = join(dir, `${fixture.name}.pdf`),
+    headers = output + '.headers';
+  const start = Date.now();
+  lastLaunch = start;
+  try {
+    const status = execFileSync(
+      'curl',
+      [
+        '-sS',
+        '--max-time',
+        '45',
+        '-D',
+        headers,
+        '-o',
+        output,
+        '-w',
+        '%{http_code}',
+        '-F',
+        `file=@${join(dir, fixture.name)}`,
+        `${base}/api/convert`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(status, '200', readFileSync(output).toString().slice(0, 400));
+    const bytes = readFileSync(output);
+    assert.equal(bytes.subarray(0, 4).toString(), '%PDF');
+    assert.match(
+      readFileSync(headers, 'utf8'),
+      /content-type: application\/pdf/i,
+    );
+    const pdf = await PDFDocument.load(bytes);
+    assert.ok(pdf.getPageCount() > 0);
+    const text = execFileSync('/opt/homebrew/bin/pdftotext', [output, '-'], {
+      encoding: 'utf8',
+    });
+    if (fixture.expect)
+      assert.ok(
+        text.replace(/\s+/g, ' ').includes(fixture.expect),
+        `Missing ${fixture.expect}; got ${text.slice(0, 300)}`,
+      );
+    if (fixture.image) {
+      const images = execFileSync(
+        '/opt/homebrew/bin/pdfimages',
+        ['-list', output],
+        { encoding: 'utf8' },
+      );
+      assert.match(images, /\bimage\b/);
+    }
+    if (fixture.pages) assert.equal(pdf.getPageCount(), fixture.pages);
+    if (fixture.landscape)
+      assert.ok(pdf.getPage(0).getWidth() > pdf.getPage(0).getHeight());
+    if (fixture.name === 'sample.html')
+      assert.ok(!text.includes('SCRIPT_EXECUTED'));
+    if (fixture.name === 'sample.epub')
+      assert.ok(text.indexOf('EPUB acceptance') < text.indexOf('EPUB second'));
+    results.push({
+      name: fixture.name,
+      ok: true,
+      bytes: bytes.length,
+      pages: pdf.getPageCount(),
+      ms: Date.now() - start,
+    });
+  } catch (e) {
+    results.push({
+      name: fixture.name,
+      ok: false,
+      error: e.message,
+      ms: Date.now() - start,
+    });
+  }
+  console.log(JSON.stringify(results.at(-1)));
+  writeFileSync(join(dir, 'results.json'), JSON.stringify(results, null, 2));
 }
-for (const [name, contents, expectedStatus, expectedCode] of [
-  ['sample.exe', 'unsupported', '400', 'UNSUPPORTED_TYPE'],
+for (const [name, contents, status, code] of [
+  ['sample.exe', Buffer.from([0, 255, 1, 2, 3, 0]), '400', 'UNSUPPORTED_TYPE'],
   ['large.txt', Buffer.alloc(26214401, 65), '413', 'TOO_LARGE'],
-  ['corrupt.docx', 'not a zip', '422', 'CONVERSION_FAILED'],
+  [
+    'corrupt.docx',
+    Buffer.from([80, 75, 3, 4, 0, 0]),
+    '422',
+    'CONVERSION_FAILED',
+  ],
+  ['empty.txt', '', '422', 'CONVERSION_FAILED'],
 ]) {
   writeFileSync(join(dir, name), contents);
   const output = join(dir, `${name}.json`);
-  const status = execFileSync('curl', ['-sS', '--max-time', '45', '-o', output, '-w', '%{http_code}', '-F', `file=@${join(dir, name)}`, `${base}/api/convert`], { encoding: 'utf8' });
-  const body = JSON.parse(readFileSync(output, 'utf8'));
-  assert.equal(status, expectedStatus); assert.equal(body.error.code, expectedCode);
-  console.log(JSON.stringify({ name, status, body }));
+  try {
+    const actual = execFileSync(
+      'curl',
+      [
+        '-sS',
+        '--max-time',
+        '45',
+        '-o',
+        output,
+        '-w',
+        '%{http_code}',
+        '-F',
+        `file=@${join(dir, name)}`,
+        `${base}/api/convert`,
+      ],
+      { encoding: 'utf8' },
+    );
+    const body = JSON.parse(readFileSync(output, 'utf8'));
+    assert.equal(actual, status);
+    assert.deepEqual(Object.keys(body), ['error']);
+    assert.equal(body.error.code, code);
+    assert.equal(typeof body.error.message, 'string');
+    results.push({ name, ok: true, status: actual, code });
+  } catch (e) {
+    results.push({ name, ok: false, error: e.message });
+  }
+  console.log(JSON.stringify(results.at(-1)));
 }
-console.log('All live conversion and error assertions passed. Samples retained at ' + dir);
+// Missing file, malformed options, and unknown endpoint do not launch browsers.
+for (const [name, args, status, code] of [
+  ['missing', ['-F', 'other=value'], '422', 'CONVERSION_FAILED'],
+  [
+    'options',
+    ['-F', `file=@${join(dir, 'sample.txt')}`, '-F', 'options={'],
+    '422',
+    'CONVERSION_FAILED',
+  ],
+  ['endpoint', [], '400', 'UNSUPPORTED_TYPE'],
+]) {
+  const output = join(dir, `${name}.json`);
+  try {
+    const actual = execFileSync(
+      'curl',
+      [
+        '-sS',
+        '-o',
+        output,
+        '-w',
+        '%{http_code}',
+        ...args,
+        `${base}/api/${name === 'endpoint' ? 'unknown' : 'convert'}`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(actual, status);
+    assert.equal(JSON.parse(readFileSync(output, 'utf8')).error.code, code);
+    results.push({ name, ok: true });
+  } catch (e) {
+    results.push({ name, ok: false, error: e.message });
+  }
+  console.log(JSON.stringify(results.at(-1)));
+}
+writeFileSync(join(dir, 'results.json'), JSON.stringify(results, null, 2));
+console.log(
+  JSON.stringify({
+    passed: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    dir,
+  }),
+);
+if (results.some((r) => !r.ok)) process.exitCode = 1;

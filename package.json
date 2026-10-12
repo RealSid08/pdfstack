@@ -17,6 +17,8 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "cfb": "^1.2.2",
+    "fast-xml-parser": "^5.11.2",
     "fflate": "^0.8.3",
     "heic-to": "^1.6.5",
     "lucide-react": "^1.55.0",
@@ -24,10 +26,12 @@
     "marked": "^18.1.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
+    "postal-mime": "^4.0.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sanitize-html": "^2.18.0",
     "utif2": "^4.1.0",
+    "word-extractor": "^1.0.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

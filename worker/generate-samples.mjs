@@ -1,0 +1,245 @@
+import { writeFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { zipSync, strToU8 } from 'fflate';
+import * as XLSX from 'xlsx';
+import * as CFB from 'cfb';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+export async function samples(dir, extensions) {
+  execFileSync(
+    '/opt/homebrew/bin/uv',
+    [
+      'run',
+      '--with',
+      'python-docx',
+      '--with',
+      'python-pptx',
+      '--with',
+      'odfpy',
+      '--with',
+      'Pillow',
+      'python',
+      fileURLToPath(new URL('./generate-samples.py', import.meta.url)),
+      dir,
+    ],
+    { stdio: 'inherit' },
+  );
+  const write = (name, bytes) => writeFileSync(join(dir, name), bytes);
+  const fixtures = [];
+  const add = (ext, expect, extra = {}) =>
+    fixtures.push({ name: `sample.${ext}`, expect, ...extra });
+  for (const ext of ['docx', 'pptx', 'odt', 'odp'])
+    add(
+      ext,
+      `${ext.toUpperCase()} acceptance sample`,
+      ext === 'pptx' ? { pages: 2, landscape: true } : {},
+    );
+  write('word.txt', 'DOC acceptance sample\nSecond paragraph preserved.');
+  execFileSync('/usr/bin/textutil', [
+    '-convert',
+    'doc',
+    '-output',
+    join(dir, 'sample.doc'),
+    join(dir, 'word.txt'),
+  ]);
+  add('doc', 'DOC acceptance sample');
+  write('rtf.txt', 'RTF acceptance sample\nUnicode cafe café.');
+  execFileSync('/usr/bin/textutil', [
+    '-convert',
+    'rtf',
+    '-output',
+    join(dir, 'sample.rtf'),
+    join(dir, 'rtf.txt'),
+  ]);
+  add('rtf', 'RTF acceptance sample');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    XLSX.utils.aoa_to_sheet([
+      ['Spreadsheet acceptance sample', 'B', 'C', 'D', 'E', 'F', 'G'],
+      ['Apples', 3, 4, 5, 6, 7, 8],
+    ]),
+    'Groceries',
+  );
+  XLSX.utils.book_append_sheet(
+    book,
+    XLSX.utils.aoa_to_sheet([['Second sheet sample'], ['Page break verified']]),
+    'Notes',
+  );
+  for (const ext of ['xlsx', 'xls', 'xlsb', 'ods']) {
+    write(`sample.${ext}`, XLSX.write(book, { type: 'buffer', bookType: ext }));
+    add(ext, 'Second sheet sample', { pages: 2, landscape: true });
+  }
+  const pdf = await PDFDocument.create(),
+    font = await pdf.embedFont(StandardFonts.Helvetica);
+  pdf
+    .addPage()
+    .drawText('iWork preview acceptance sample', {
+      x: 40,
+      y: 700,
+      font,
+      size: 18,
+    });
+  const preview = await pdf.save();
+  // Preview-bearing legacy iWork package fixtures. These exercise QuickLook
+  // extraction, not Apple's proprietary IWA editing model.
+  for (const ext of ['pages', 'key', 'numbers']) {
+    write(
+      `sample.${ext}`,
+      zipSync({
+        'QuickLook/Preview.pdf': preview,
+        'QuickLook/Thumbnail.png': readFileSync(join(dir, 'image.png')),
+        'index.xml': strToU8(
+          '<?xml version="1.0"?><document><text>iWork acceptance sample</text></document>',
+        ),
+      }),
+    );
+    add(ext, 'iWork preview acceptance sample');
+  }
+  write(
+    'sample.epub',
+    zipSync({
+      mimetype: strToU8('application/epub+zip'),
+      'META-INF/container.xml': strToU8(
+        '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+      ),
+      'OEBPS/book.opf': strToU8(
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata/><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="two"/><itemref idref="one"/></spine></package>',
+      ),
+      'OEBPS/one.xhtml': strToU8(
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>EPUB second chapter</p></body></html>',
+      ),
+      'OEBPS/two.xhtml': strToU8(
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>EPUB acceptance sample</h1><img src="image.png"/></body></html>',
+      ),
+      'OEBPS/image.png': readFileSync(join(dir, 'image.png')),
+    }),
+  );
+  add('epub', 'EPUB acceptance sample', { pages: 2 });
+  // Valid PalmDB header, PalmDOC record and uncompressed MOBI text record.
+  const text = Buffer.from(
+    '<html><body><p>MOBI acceptance sample</p></body></html>',
+  );
+  const header = Buffer.alloc(94);
+  header.write('Acceptance');
+  header.write('BOOKMOBI', 60);
+  header.writeUInt16BE(2, 76);
+  header.writeUInt32BE(94, 78);
+  header.writeUInt32BE(342, 86);
+  const mobi = Buffer.alloc(248);
+  mobi.writeUInt16BE(1);
+  mobi.writeUInt32BE(text.length, 4);
+  mobi.writeUInt16BE(1, 8);
+  mobi.writeUInt16BE(4096, 10);
+  mobi.write('MOBI', 16);
+  mobi.writeUInt32BE(232, 20);
+  mobi.writeUInt32BE(2, 24);
+  mobi.writeUInt32BE(65001, 28);
+  write('sample.mobi', Buffer.concat([header, mobi, text]));
+  add('mobi', 'MOBI acceptance sample');
+  const img = readFileSync(join(dir, 'image.png')).toString('base64');
+  for (const ext of ['eml', 'mhtml', 'mht']) {
+    write(
+      `sample.${ext}`,
+      `From: Sender <sender@example.test>\r\nTo: Receiver <receiver@example.test>\r\nSubject: ${ext.toUpperCase()} acceptance sample\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="sample"\r\n\r\n--sample\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>${ext.toUpperCase()} acceptance sample</p><img src="cid:sample-image">\r\n--sample\r\nContent-Type: image/png\r\nContent-ID: <sample-image>\r\nContent-Transfer-Encoding: base64\r\n\r\n${img}\r\n--sample--\r\n`,
+    );
+    add(ext, `${ext.toUpperCase()} acceptance sample`);
+  }
+  const msg = CFB.utils.cfb_new();
+  CFB.utils.cfb_add(msg, '__properties_version1.0', Buffer.alloc(32));
+  CFB.utils.cfb_add(
+    msg,
+    '__substg1.0_0037001F',
+    Buffer.from('MSG acceptance sample\0', 'utf16le'),
+  );
+  CFB.utils.cfb_add(
+    msg,
+    '__substg1.0_1000001F',
+    Buffer.from(
+      'MSG acceptance sample\r\nMessage body paragraph.\0',
+      'utf16le',
+    ),
+  );
+  write('sample.msg', CFB.write(msg, { type: 'buffer' }));
+  add('msg', 'MSG acceptance sample');
+  // Structured PowerPoint binary record fixture: Document -> Slide -> text atoms.
+  const record = (type, data, container = false) => {
+    const h = Buffer.alloc(8);
+    h.writeUInt16LE(container ? 15 : 0);
+    h.writeUInt16LE(type, 2);
+    h.writeUInt32LE(data.length, 4);
+    return Buffer.concat([h, data]);
+  };
+  const ppt = CFB.utils.cfb_new();
+  const slides = [1, 2].map((i) =>
+    record(
+      1006,
+      record(4000, Buffer.from(`PPT acceptance sample slide ${i}`, 'utf16le')),
+      true,
+    ),
+  );
+  CFB.utils.cfb_add(
+    ppt,
+    'PowerPoint Document',
+    record(1000, Buffer.concat(slides), true),
+  );
+  CFB.utils.cfb_add(ppt, 'Pictures', readFileSync(join(dir, 'image.png')));
+  write('sample.ppt', CFB.write(ppt, { type: 'buffer' }));
+  add('ppt', 'PPT acceptance sample');
+  const texts = {
+    csv: 'CSV acceptance sample,Count\nApples,3',
+    tsv: 'TSV acceptance sample\tCount\nApples\t3',
+    json: '{"text":"JSON acceptance sample"}',
+    xml: '<?xml version="1.0"?><root><text>XML acceptance sample</text></root>',
+    html: '<h1>HTML acceptance sample</h1><script>document.body.textContent="SCRIPT_EXECUTED"</script><iframe src="http://169.254.169.254/"></iframe><img src="https://example.com/tracker.png"><p>Safe content remains</p>',
+    htm: '<h1>HTM acceptance sample</h1>',
+    md: '# MD acceptance sample\n\n**Bold content**',
+    markdown: '# MARKDOWN acceptance sample',
+  };
+  for (const ext of extensions) {
+    if (fixtures.some((f) => f.name === `sample.${ext}`)) continue;
+    write(
+      `sample.${ext}`,
+      texts[ext] ||
+        `${ext.toUpperCase()} acceptance sample\nText and code remain printable.`,
+    );
+    add(ext, `${ext.toUpperCase()} acceptance sample`);
+  }
+  write('unknown.custom', 'Unknown UTF8 acceptance sample');
+  fixtures.push({
+    name: 'unknown.custom',
+    expect: 'Unknown UTF8 acceptance sample',
+  });
+  write(
+    'utf16.custom',
+    Buffer.concat([
+      Buffer.from([255, 254]),
+      Buffer.from('UTF16 acceptance sample', 'utf16le'),
+    ]),
+  );
+  fixtures.push({ name: 'utf16.custom', expect: 'UTF16 acceptance sample' });
+  for (const ext of ['docx', 'pptx', 'rtf', 'xls']) {
+    write(`magic-${ext}.bin`, readFileSync(join(dir, `sample.${ext}`)));
+    fixtures.push({
+      name: `magic-${ext}.bin`,
+      expect:
+        ext === 'xls'
+          ? 'Second sheet sample'
+          : `${ext.toUpperCase()} acceptance sample`,
+    });
+  }
+  write('magic-pdf.bin', preview);
+  fixtures.push({
+    name: 'magic-pdf.bin',
+    expect: 'iWork preview acceptance sample',
+  });
+  write('magic-image.bin', readFileSync(join(dir, 'image.png')));
+  fixtures.push({ name: 'magic-image.bin', image: true });
+  write(
+    'preview-image.pages',
+    zipSync({ 'preview.jpg': readFileSync(join(dir, 'image.png')) }),
+  );
+  fixtures.push({ name: 'preview-image.pages', image: true });
+  return fixtures;
+}
