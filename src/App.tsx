@@ -11,7 +11,10 @@ import { canShareFiles, downloadBlob, safeFilename, shareFile } from "./lib/down
 import { stripExt } from "./lib/detect";
 import type { Capabilities } from "./lib/types";
 
+import { track, trackPageView } from "./lib/telemetry";
+
 export default function App() {
+  useEffect(trackPageView, []);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   useEffect(() => {
     loadCapabilities().then(setCaps);
@@ -48,6 +51,7 @@ export default function App() {
       const bytes = await mergeAll(items, stripExt(name));
       return new File([bytes as BlobPart], name, { type: "application/pdf" });
     } catch {
+      track("pdf_build_failed", { outcome: "error" });
       setToast("Couldn't build the PDF. Try removing the file that failed.");
       return null;
     } finally {
@@ -57,11 +61,18 @@ export default function App() {
 
   const onDownload = async () => {
     const f = await build();
-    if (f) downloadBlob(f, f.name);
+    if (f) {
+      downloadBlob(f, f.name);
+      track("pdf_downloaded", { count: stats.ready, pages: stats.pages, bytes: f.size, outcome: "success" });
+    }
   };
   const onShare = async () => {
     const f = await build();
-    if (f && !(await shareFile(f))) downloadBlob(f, f.name);
+    if (f) {
+      const shared = await shareFile(f);
+      if (!shared) downloadBlob(f, f.name);
+      track(shared ? "pdf_shared" : "pdf_downloaded", { count: stats.ready, pages: stats.pages, bytes: f.size, outcome: "success" });
+    }
   };
 
   useEffect(() => {
@@ -121,6 +132,10 @@ export default function App() {
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-6 sm:px-6">
         {empty ? (
           <section className="pt-4 sm:pt-8">
+            <div className="mb-6 text-center">
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Any file to PDF</h1>
+              <p className="mx-auto mt-3 max-w-lg text-sm text-muted sm:text-base">Upload your files, arrange them in any order, and download one PDF. Free, with no account needed.</p>
+            </div>
             <DropZone onFiles={addFiles} />
             <ul className="mx-auto mt-6 grid max-w-xl grid-cols-1 gap-x-6 gap-y-2 text-sm text-muted sm:grid-cols-3 sm:text-center">
               <li><strong className="font-medium text-ink">Drop or paste</strong> any number of files.</li>
@@ -168,7 +183,7 @@ export default function App() {
         )}
       </main>
       <footer className="mx-auto w-full max-w-3xl px-4 pb-6 text-center text-xs text-muted sm:px-6">
-        Free, no account, no tracking. Built on Cloudflare.
+        Free, no account, no files stored. Built on Cloudflare.
       </footer>
 
       {dragOver && (

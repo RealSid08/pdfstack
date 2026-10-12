@@ -5,6 +5,8 @@ import { ConvertError, countPages, imageToPdf, pdfToPdf, serverConvert } from ".
 import { imageThumb, pdfThumb } from "../lib/thumbs";
 import { decodeImage, release, type Decoded } from "../lib/image";
 
+import { track } from "../lib/telemetry";
+
 type Action =
   | { type: "add"; items: Item[] }
   | { type: "remove"; id: string }
@@ -33,7 +35,7 @@ function reducer(state: Item[], a: Action): Item[] {
     case "requeue":
       return state.map((i) =>
         (a.ids ? a.ids.includes(i.id) : true) && (a.routes ? a.routes.includes(i.route) : true) && i.route !== "unsupported"
-          ? { ...i, status: "queued", error: undefined }
+          ? { ...i, status: "queued", error: undefined, note: undefined, pdf: undefined, pages: undefined }
           : i,
       );
   }
@@ -44,13 +46,17 @@ const CONCURRENCY = 2;
 export function useItems(caps: Capabilities | null) {
   const [items, dispatch] = useReducer(reducer, []);
   const [pageSize, setPageSizeState] = useState<PageSize>("A4");
-  const inflight = useRef(new Set<string>());
+  const inflight = useRef(new Map<string, AbortController>());
+  const [completed, setCompleted] = useState(0);
+  useEffect(() => () => {
+    for (const controller of inflight.current.values()) controller.abort();
+  }, []);
   const latest = useRef({ items, pageSize });
   latest.current = { items, pageSize };
 
   const addFiles = useCallback(
     (files: Iterable<File>) => {
-      const list = Array.from(files).filter((f) => f.size > 0 || f.type);
+      const list = Array.from(files);
       if (!list.length) return;
       const now = Date.now();
       const next: Item[] = list.map((file, n) => {
@@ -72,6 +78,7 @@ export function useItems(caps: Capabilities | null) {
                 : undefined,
         };
       });
+      track("files_added", { count: next.length, bytes: next.reduce((sum, item) => sum + item.file.size, 0) });
       dispatch({ type: "add", items: next });
     },
     [caps],
@@ -80,11 +87,20 @@ export function useItems(caps: Capabilities | null) {
   // Conversion scheduler: pick queued items, up to CONCURRENCY at a time.
   useEffect(() => {
     const queued = items.filter((i) => i.status === "queued" && !inflight.current.has(i.id));
-    const slots = CONCURRENCY - inflight.current.size;
-    for (const item of queued.slice(0, Math.max(0, slots))) {
-      inflight.current.add(item.id);
-      dispatch({ type: "patch", id: item.id, patch: { status: "converting", error: undefined } });
+    let slots = CONCURRENCY - inflight.current.size;
+    let serverBusy = items.some((i) => i.route === "server" && inflight.current.has(i.id));
+    for (const item of queued) {
+      if (slots <= 0) break;
+      if (item.route === "server") {
+        if (serverBusy) continue;
+        serverBusy = true;
+      }
+      slots--;
+      const controller = new AbortController();
+      inflight.current.set(item.id, controller);
+      dispatch({ type: "patch", id: item.id, patch: { status: "converting", error: undefined, note: undefined } });
       const ps = latest.current.pageSize;
+      const started = performance.now();
       (async () => {
         const patch: Partial<Item> = {};
         try {
@@ -108,16 +124,22 @@ export function useItems(caps: Capabilities | null) {
             patch.pages = r.pages;
             patch.thumb = item.thumb ?? (await pdfThumb(r.bytes));
           } else {
-            patch.pdf = await serverConvert(item.file, ps);
+            patch.pdf = await serverConvert(item.file, ps, controller.signal, (secs) =>
+              dispatch({ type: "patch", id: item.id, patch: { note: `Server busy, retrying in ${secs}s…` } }),
+            );
+            patch.note = undefined;
             patch.pages = await countPages(patch.pdf);
             patch.thumb = await pdfThumb(patch.pdf);
           }
           patch.status = "ready";
+          if (!controller.signal.aborted) track("file_ready", { route: item.route === "unsupported" ? "server" : item.route, bytes: item.file.size, pages: patch.pages, durationMs: Math.round(performance.now() - started), outcome: "success" });
         } catch (e) {
           patch.status = "error";
+          if (!controller.signal.aborted) track("file_failed", { route: item.route === "unsupported" ? "server" : item.route, durationMs: Math.round(performance.now() - started), outcome: "error" });
           patch.error = e instanceof ConvertError ? e.message : "Something went wrong converting this file.";
         } finally {
           inflight.current.delete(item.id);
+          setCompleted((n) => n + 1);
           // Only apply if the item still exists and wasn't re-queued meanwhile.
           const cur = latest.current.items.find((i) => i.id === item.id);
           if (cur && cur.status === "converting") dispatch({ type: "patch", id: item.id, patch });
@@ -125,11 +147,22 @@ export function useItems(caps: Capabilities | null) {
         }
       })();
     }
-  }, [items]);
+  }, [items, completed]);
 
-  const remove = useCallback((id: string) => dispatch({ type: "remove", id }), []);
-  const clear = useCallback(() => dispatch({ type: "clear" }), []);
-  const move = useCallback((from: number, to: number) => dispatch({ type: "move", from, to }), []);
+  const remove = useCallback((id: string) => {
+    track("file_removed", { count: 1 });
+    inflight.current.get(id)?.abort();
+    dispatch({ type: "remove", id });
+  }, []);
+  const clear = useCallback(() => {
+    for (const controller of inflight.current.values()) controller.abort();
+    track("files_cleared", { count: latest.current.items.length });
+    dispatch({ type: "clear" });
+  }, []);
+  const move = useCallback((from: number, to: number) => {
+    if (from !== to) track("files_reordered");
+    dispatch({ type: "move", from, to });
+  }, []);
   const retry = useCallback((id: string) => dispatch({ type: "requeue", ids: [id] }), []);
   const rotate = useCallback((id: string) => {
     const cur = latest.current.items.find((i) => i.id === id);
@@ -138,6 +171,7 @@ export function useItems(caps: Capabilities | null) {
     dispatch({ type: "patch", id, patch: { rotation, status: "queued", error: undefined } });
   }, []);
   const setPageSize = useCallback((ps: PageSize) => {
+    track("page_size_changed");
     setPageSizeState(ps);
     latest.current.pageSize = ps;
     dispatch({ type: "requeue", routes: ["image", "server"] });

@@ -26,7 +26,7 @@ const SIZES: { value: PageSize; label: string; hint: string }[] = [
 
 export function OutputBar(p: Props) {
   const [open, setOpen] = useState(false);
-  const disabled = p.readyCount === 0 || p.building;
+  const disabled = p.readyCount === 0 || p.pending > 0 || p.building;
   const summary =
     p.pending > 0
       ? `Preparing ${p.pending} of ${p.fileCount}…`

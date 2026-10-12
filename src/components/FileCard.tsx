@@ -94,7 +94,7 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
           )}
           {busy && (
             <span className="inline-flex items-center gap-1 text-muted">
-              <Loader2 className="size-3.5 animate-spin" /> {item.route === "server" ? "Converting on server…" : "Preparing…"}
+              <Loader2 className="size-3.5 animate-spin" /> {item.note ?? (item.route === "server" ? "Converting…" : "Preparing…")}
             </span>
           )}
           {item.status === "error" && (

@@ -47,7 +47,7 @@ export function DropZone({ onFiles, compact, hint }: Props) {
       <button
         type="button"
         onClick={open}
-        className="group pop flex min-h-[46vh] w-full flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-line bg-card/70 px-6 py-12 text-center shadow-card transition hover:border-accent hover:bg-card active:scale-[.995] sm:min-h-[52vh]"
+        className="group pop flex min-h-[38vh] w-full flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-line bg-card/70 px-6 py-12 text-center shadow-card transition hover:border-accent hover:bg-card active:scale-[.995] sm:min-h-[42vh]"
       >
         <span className="grid size-16 place-items-center rounded-2xl bg-accent-soft text-accent transition group-hover:scale-105">
           <Upload className="size-7" strokeWidth={2} />
@@ -57,7 +57,7 @@ export function DropZone({ onFiles, compact, hint }: Props) {
             <span className="sm:hidden">Tap to add files</span>
             <span className="hidden sm:inline">Drop files here or click to browse</span>
           </span>
-          <span className="block text-sm text-muted">Photos, PDFs, Word, Excel, text and more. Add as many as you like.</span>
+          <span className="block text-sm text-muted">Images, documents, spreadsheets, presentations and more. Mix file types in one PDF.</span>
         </span>
         {hint}
       </button>

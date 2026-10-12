@@ -9,7 +9,7 @@ export function Header() {
         </span>
         <span className="text-lg font-semibold tracking-tight">Stack</span>
       </a>
-      <span className="text-xs text-muted">Files in. One PDF out. Nothing stored.</span>
+      <span className="text-xs text-muted">Any file to PDF</span>
     </header>
   );
 }

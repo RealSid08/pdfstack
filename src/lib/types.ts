@@ -16,6 +16,7 @@ export interface Item {
   pages?: number;
   pdf?: Uint8Array;
   error?: string;
+  note?: string;
 }
 
 export interface Capabilities {

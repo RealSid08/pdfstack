@@ -84,33 +84,58 @@ export async function pdfToPdf(file: File, rotation: number): Promise<{ bytes: U
   return { bytes: src, pages: doc.getPageCount() };
 }
 
-export async function serverConvert(file: File, pageSize: PageSize, signal?: AbortSignal): Promise<Uint8Array> {
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((ok, bad) => {
+    const abort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      bad(new DOMException("Aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      ok();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+
+export async function serverConvert(file: File, pageSize: PageSize, signal?: AbortSignal, onRetry?: (seconds: number) => void): Promise<Uint8Array> {
   const fd = new FormData();
   fd.append("file", file, file.name);
   fd.append("options", JSON.stringify({ pageSize: pageSize === "fit" ? "A4" : pageSize }));
-  let res: Response;
-  try {
-    res = await fetch("/api/convert", { method: "POST", body: fd, signal });
-  } catch (e) {
-    if ((e as Error).name === "AbortError") throw e;
-    throw new ConvertError("NETWORK", "Couldn't reach the converter. Check your connection and try again.");
-  }
-  if (!res.ok) {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch("/api/convert", { method: "POST", body: fd, signal });
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw e;
+      throw new ConvertError("NETWORK", "Couldn't reach the converter. Check your connection and try again.");
+    }
+    if (res.ok) {
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.length < 5 || String.fromCharCode(...bytes.subarray(0, 4)) !== "%PDF")
+        throw new ConvertError("BAD_OUTPUT", "The converter returned something that isn't a PDF.");
+      return bytes;
+    }
+    // Busy server: wait and retry a few times before giving up.
+    if ((res.status === 429 || res.status === 503) && attempt < 4) {
+      const ra = Number(res.headers.get("retry-after"));
+      const wait = Math.min(60, Number.isFinite(ra) && ra > 0 ? ra : 2 * (attempt + 1)) * 1000;
+      onRetry?.(Math.round(wait / 1000));
+      await sleep(wait, signal);
+      continue;
+    }
     let code = "INTERNAL";
-    let message = res.status === 502 || res.status === 503 || res.status === 504 ? "The converter is unavailable right now. Try again in a moment." : `Conversion failed (${res.status}).`;
+    let message = res.status === 502 || res.status === 503 || res.status === 504 ? "The converter is unavailable right now. Try again in a moment." : res.status === 429 ? "The converter is busy. Try again in a moment." : `Conversion failed (${res.status}).`;
     try {
       const body = (await res.json()) as { error?: { code?: string; message?: string } };
       code = body.error?.code ?? code;
-      message = body.error?.message ?? message;
+      if (res.status !== 429) message = body.error?.message ?? message;
     } catch {
       /* non-JSON error */
     }
     throw new ConvertError(code, message);
   }
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.length < 5 || String.fromCharCode(...bytes.subarray(0, 4)) !== "%PDF")
-    throw new ConvertError("BAD_OUTPUT", "The converter returned something that isn't a PDF.");
-  return bytes;
 }
 
 export async function countPages(bytes: Uint8Array): Promise<number> {
