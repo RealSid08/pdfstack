@@ -23,7 +23,17 @@
     }
   ],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": false
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
   },
   "account_id": "a948d7fb82122c0f6f00bec3a43585b1",
   "browser": {
@@ -36,6 +46,14 @@
       "namespace_id": "2026101201",
       "simple": {
         "limit": 30,
+        "period": 60
+      }
+    },
+    {
+      "name": "EVENT_LIMITER",
+      "namespace_id": "2026101202",
+      "simple": {
+        "limit": 120,
         "period": 60
       }
     }
