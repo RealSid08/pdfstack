@@ -1,3 +1,4 @@
+import { drawToCanvas, type Decoded } from "./image";
 const THUMB = 160;
 
 type PdfJs = typeof import("pdfjs-dist");
@@ -10,20 +11,10 @@ function pdfjs(): Promise<PdfJs> {
   return pdfjsPromise;
 }
 
-export async function imageThumb(file: File): Promise<string | undefined> {
+export function imageThumb(img: Decoded): string | undefined {
   try {
-    const bmp = await createImageBitmap(file);
-    const s = Math.min(1, THUMB / Math.max(bmp.width, bmp.height));
-    const c = document.createElement("canvas");
-    c.width = Math.max(1, Math.round(bmp.width * s));
-    c.height = Math.max(1, Math.round(bmp.height * s));
-    const ctx = c.getContext("2d");
-    if (!ctx) return undefined;
-    ctx.drawImage(bmp, 0, 0, c.width, c.height);
-    bmp.close();
-    return c.toDataURL("image/jpeg", 0.8);
+    return drawToCanvas(img, 0, THUMB).toDataURL("image/jpeg", 0.8);
   } catch {
-    if (file.type === "image/svg+xml") return URL.createObjectURL(file);
     return undefined;
   }
 }

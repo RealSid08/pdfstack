@@ -3,6 +3,7 @@ import type { Capabilities, Item, PageSize } from "../lib/types";
 import { routeFor, extOf } from "../lib/detect";
 import { ConvertError, countPages, imageToPdf, pdfToPdf, serverConvert } from "../lib/convert";
 import { imageThumb, pdfThumb } from "../lib/thumbs";
+import { decodeImage, release, type Decoded } from "../lib/image";
 
 type Action =
   | { type: "add"; items: Item[] }
@@ -88,8 +89,18 @@ export function useItems(caps: Capabilities | null) {
         const patch: Partial<Item> = {};
         try {
           if (item.route === "image") {
-            if (!item.thumb) patch.thumb = await imageThumb(item.file);
-            patch.pdf = await imageToPdf(item.file, item.rotation, ps);
+            let decoded: Decoded | undefined;
+            try {
+              decoded = await decodeImage(item.file);
+            } catch {
+              throw new ConvertError("DECODE_FAILED", "This image couldn't be read. Try exporting it as JPG or PNG.");
+            }
+            try {
+              if (!item.thumb) patch.thumb = imageThumb(decoded);
+              patch.pdf = await imageToPdf(item.file, item.rotation, ps, decoded);
+            } finally {
+              release(decoded);
+            }
             patch.pages = 1;
           } else if (item.route === "pdf") {
             const r = await pdfToPdf(item.file, item.rotation);

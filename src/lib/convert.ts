@@ -1,6 +1,7 @@
 import { PDFDocument, degrees } from "pdf-lib";
 import { PAGE_SIZES, type Item, type PageSize } from "./types";
 import { extOf } from "./detect";
+import { decodeImage, drawToCanvas, release, type Decoded } from "./image";
 
 const MAX_EDGE = 4000; // px, keeps canvas memory sane on phones
 const MARGIN = 24; // pt
@@ -13,65 +14,31 @@ export class ConvertError extends Error {
   }
 }
 
-async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
-  const ext = extOf(file.name);
-  if (ext === "svg" || file.type === "image/svg+xml") {
-    const url = URL.createObjectURL(file);
-    try {
-      const img = new Image();
-      img.decoding = "async";
-      await new Promise<void>((ok, bad) => {
-        img.onload = () => ok();
-        img.onerror = () => bad(new Error("bad svg"));
-        img.src = url;
-      });
-      if (!img.naturalWidth) throw new Error("empty svg");
-      return img;
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
+/** Rasterise an image to JPEG/PNG bytes, applying rotation and an edge cap. */
+export async function rasterise(file: File, rotation: number, decoded?: Decoded): Promise<{ bytes: Uint8Array; w: number; h: number; png: boolean }> {
+  let img: Decoded;
   try {
-    return await createImageBitmap(file);
+    img = decoded ?? (await decodeImage(file));
   } catch {
     throw new ConvertError("DECODE_FAILED", "This image couldn't be read. Try exporting it as JPG or PNG.");
   }
-}
-
-function sizeOf(img: ImageBitmap | HTMLImageElement): [number, number] {
-  return "naturalWidth" in img ? [img.naturalWidth, img.naturalHeight] : [img.width, img.height];
-}
-
-/** Rasterise an image to JPEG/PNG bytes, applying rotation and an edge cap. */
-export async function rasterise(file: File, rotation: number): Promise<{ bytes: Uint8Array; w: number; h: number; png: boolean }> {
-  const img = await decodeImage(file);
-  const [iw, ih] = sizeOf(img);
-  const scale = Math.min(1, MAX_EDGE / Math.max(iw, ih));
-  const sw = Math.max(1, Math.round(iw * scale));
-  const sh = Math.max(1, Math.round(ih * scale));
-  const rotated = rotation === 90 || rotation === 270;
-  const canvas = document.createElement("canvas");
-  canvas.width = rotated ? sh : sw;
-  canvas.height = rotated ? sw : sh;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new ConvertError("NO_CANVAS", "Your browser couldn't process this image.");
   const ext = extOf(file.name);
-  const png = ext === "png" || ext === "gif" || ext === "svg" || ext === "bmp" || file.type === "image/png";
-  if (!png) {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const png = ext === "png" || ext === "gif" || ext === "svg" || ext === "bmp" || ext === "tif" || ext === "tiff" || file.type === "image/png";
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = drawToCanvas(img, rotation, MAX_EDGE, png ? undefined : "#ffffff");
+  } catch {
+    throw new ConvertError("NO_CANVAS", "Your browser couldn't process this image.");
+  } finally {
+    if (!decoded) release(img);
   }
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((rotation * Math.PI) / 180);
-  ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
-  if ("close" in img) img.close();
   const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, png ? "image/png" : "image/jpeg", 0.9));
   if (!blob) throw new ConvertError("ENCODE_FAILED", "Your browser couldn't process this image.");
   return { bytes: new Uint8Array(await blob.arrayBuffer()), w: canvas.width, h: canvas.height, png };
 }
 
-export async function imageToPdf(file: File, rotation: number, pageSize: PageSize): Promise<Uint8Array> {
-  const { bytes, w, h, png } = await rasterise(file, rotation);
+export async function imageToPdf(file: File, rotation: number, pageSize: PageSize, decoded?: Decoded): Promise<Uint8Array> {
+  const { bytes, w, h, png } = await rasterise(file, rotation, decoded);
   const doc = await PDFDocument.create();
   const image = png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
   let pw: number, ph: number, x: number, y: number, dw: number, dh: number;

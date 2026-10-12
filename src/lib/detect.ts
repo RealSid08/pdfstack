@@ -1,6 +1,6 @@
 import type { Capabilities, Route } from "./types";
 
-export const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "svg"]);
+export const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "jfif", "webp", "gif", "bmp", "avif", "svg", "ico", "heic", "heif", "hif", "tif", "tiff"]);
 export const PDF_EXTS = new Set(["pdf"]);
 
 export function extOf(name: string): string {
@@ -11,9 +11,10 @@ export function extOf(name: string): string {
 export function routeFor(file: File, caps: Capabilities | null): Route {
   const ext = extOf(file.name);
   if (ext === "pdf" || file.type === "application/pdf") return "pdf";
-  if (IMAGE_EXTS.has(ext) || (file.type.startsWith("image/") && !/hei[cf]/.test(file.type))) return "image";
-  if (caps?.serverExtensions.includes(ext)) return "server";
-  return caps ? "unsupported" : "server";
+  if (IMAGE_EXTS.has(ext) || file.type.startsWith("image/")) return "image";
+  // Everything else goes to the server, which decides. It can also treat unknown text-like files as plain text.
+  void caps;
+  return "server";
 }
 
 export function formatBytes(n: number): string {
