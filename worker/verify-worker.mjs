@@ -58,9 +58,17 @@ for (const [message, status, code] of [
 }
 let closeCount = 0;
 const original = setTimeout;
-globalThis.setTimeout = (fn, delay, ...args) =>
-  original(fn, delay === 30000 ? 1 : delay, ...args);
+let expire;
+globalThis.setTimeout = (fn, delay, ...args) => {
+  if (delay === 30000) {
+    expire = () => fn(...args);
+    return original(() => {}, delay);
+  }
+  return original(fn, delay, ...args);
+};
 globalThis.testLaunch = async () => {
+  assert.ok(expire, "deadline must be installed before browser launch");
+  expire();
   await new Promise((r) => original(r, 20));
   return {
     close: async () => {

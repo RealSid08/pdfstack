@@ -144,3 +144,15 @@ VERIFY_RATE_LIMIT=1 node worker/verify-events.mjs
 ```
 
 The supplemental test fetches Apache POI's pinned `REL_3_14_FINAL/test-data/slideshow/basic_test_ppt_file.ppt` fixture locally, verifies two pages without duplicated historical/master text, checks MHTML Content-Location images, and asserts the expanded-archive cap. It never uses an external conversion service.
+
+## GitHub CI/CD
+
+Repository: `RealSid08/pdf-realsid` (private). `.github/workflows/ci.yml` runs locked dependency installation, lint, document parser fixtures, Worker failure/cleanup tests, TypeScript and the frontend build on pull requests and pushes to `main`.
+
+Successful `main` checks deploy the checked asset artifact and Worker to `pdf.realsid08.me`. Pull requests do not receive production credentials and do not deploy. GitHub's `production` environment records deployments. Main runs are serialized; pull-request runs superseded by new commits are cancelled.
+
+GitHub secret: `CLOUDFLARE_API_TOKEN`. Repository variable: `CLOUDFLARE_ACCOUNT_ID`. The token `pdf-realsid-ci` is scoped to the existing account and the `realsid08.me` zone, with Workers Scripts Edit, Account Settings Read, Zone Read and Workers Routes Edit. No credentials are committed. For rotation, create a token with the same permissions and pipe its value into `gh secret set CLOUDFLARE_API_TOKEN --repo RealSid08/pdf-realsid`; never put the value in shell arguments or logs.
+
+The Node runtime follows `.nvmrc`; pnpm follows `packageManager`. Workflow actions are pinned to commit SHAs. Fixture generation uses uv 0.12.23 and pinned Python fixture dependencies; the test-only legacy DOC fixture was generated with macOS textutil and contains synthetic acceptance text. CI runs on Linux without an Office application.
+
+Post-deploy verification checks public health, capabilities, the HTML/JavaScript assets and the telemetry endpoint. Full live format tests remain a deliberate manual acceptance tool because they consume Browser Run quota. GitHub run details must show the deployment step executed, not only a green check job.

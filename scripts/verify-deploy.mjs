@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+const origin = 'https://pdf.realsid08.me';
+const get = async (path, init) => {
+  const response = await fetch(origin + path, { ...init, signal: AbortSignal.timeout(20000) });
+  assert.ok(response.ok, `${path}: HTTP ${response.status}`);
+  return response;
+};
+const health = await (await get('/api/health')).json();
+assert.equal(health.ok, true);
+assert.ok(health.version);
+const capabilities = await (await get('/api/capabilities')).json();
+assert.ok(capabilities.serverExtensions.includes('docx'));
+assert.equal(capabilities.textFallback, true);
+const html = await (await get('/')).text();
+assert.match(html, /Any file to PDF/);
+const script = html.match(/src="([^"]+\.js)"/);
+assert.ok(script, 'App JavaScript entry must exist');
+await get(script[1]);
+const event = await get('/api/events', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'page_view', viewport: 'desktop' }) });
+assert.equal(event.status, 204);
+console.log(JSON.stringify({ ok: true, origin, deploymentVersion: health.version }));

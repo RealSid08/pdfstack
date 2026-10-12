@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy": "pnpm build && wrangler deploy"
+    "deploy": "pnpm build && wrangler deploy",
+    "test": "node worker/verify-local.mjs && node worker/verify-worker.mjs"
   },
   "dependencies": {
     "@cloudflare/puppeteer": "^1.4.0",
