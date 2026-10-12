@@ -1,5 +1,5 @@
 {
-  "name": "pdf-realsid",
+  "name": "pdfstack",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -51,6 +51,16 @@
   },
   "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": ">=24"
+    "node": ">=26 <27"
+  },
+  "license": "MIT",
+  "description": "Stack: combine images, PDFs, and documents into one PDF with a stateless Cloudflare converter.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RealSid08/pdfstack.git"
+  },
+  "homepage": "https://stack.realsid08.me",
+  "bugs": {
+    "url": "https://github.com/RealSid08/pdfstack/issues"
   }
 }

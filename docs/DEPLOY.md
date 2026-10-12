@@ -15,10 +15,10 @@ If pnpm reports ignored dependency builds on a fresh install, approve only `esbu
 
 ## Cloudflare resources
 
-Account: `a948d7fb82122c0f6f00bec3a43585b1`.
+Set `CLOUDFLARE_ACCOUNT_ID` to your own account ID. The public Wrangler config deliberately omits an account ID.
 
 - Worker `pdf-realsid`, configured in `wrangler.jsonc`.
-- Custom domain `pdf.realsid08.me` in the existing `realsid08.me` zone. Cloudflare manages its DNS and HTTPS certificate. `workers.dev` and preview URLs are disabled.
+- Custom domains `stack.realsid08.me` and `pdf.realsid08.me` in the existing `realsid08.me` zone. Cloudflare manages its DNS and HTTPS certificate. `workers.dev` and preview URLs are disabled.
 - Static asset bundle `dist/`, binding `ASSETS`, SPA fallback. `/api/*` runs through the Worker first.
 - Browser Rendering / Browser Run binding `BROWSER`, used remotely in local development as well as production.
 - Native rate limiting binding `CONVERT_LIMITER`, account namespace `2026101201`, 30 conversion attempts per IP per 60 seconds. Keys are prefixed `pdf:`. This is Cloudflare's approximate, per-location limiter, not a global billing ceiling; people sharing an IP share this limit. Browser service limits can independently return `RATE_LIMITED`.
@@ -156,3 +156,23 @@ GitHub secret: `CLOUDFLARE_API_TOKEN`. Repository variable: `CLOUDFLARE_ACCOUNT_
 The Node runtime follows `.nvmrc`; pnpm follows `packageManager`. Workflow actions are pinned to commit SHAs. Fixture generation uses uv 0.12.23 and pinned Python fixture dependencies; the test-only legacy DOC fixture was generated with macOS textutil and contains synthetic acceptance text. CI runs on Linux without an Office application.
 
 Post-deploy verification checks public health, capabilities, the HTML/JavaScript assets and the telemetry endpoint. Full live format tests remain a deliberate manual acceptance tool because they consume Browser Run quota. GitHub run details must show the deployment step executed, not only a green check job.
+
+## GitHub deployment and fork safety
+
+The canonical repository is `RealSid08/pdfstack`. GitHub Actions builds and checks
+pull requests without production credentials. Only a push to the canonical
+repository's `main` branch or a manual run on that branch can deploy. Forks run
+checks only. Actions are pinned to commit hashes; Dependabot proposes updates.
+
+For your own deployment, configure the `production` environment to allow only
+`main`, set its `CLOUDFLARE_API_TOKEN` secret (scoped to your account's Workers,
+Browser Rendering and the necessary zone routes), and set the repository variable
+`CLOUDFLARE_ACCOUNT_ID`. Replace both custom domains with your own domains, and
+update the workflow's canonical repository guard and verification origins.
+Do not commit tokens, Wrangler credentials or `.dev.vars`.
+
+The `main` branch requires a PR, the `Check` job, resolved review conversations,
+and linear history. An additional ruleset restricts updates to repository admins
+through PRs only. Currently `RealSid08` is the sole admin. No ruleset permits direct
+pushes, force pushes or branch deletion, including for admins. Own PRs need no
+second-person approval; contributor PRs are reviewed and merged by the maintainer.

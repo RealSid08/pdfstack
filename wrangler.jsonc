@@ -20,6 +20,10 @@
     {
       "pattern": "pdf.realsid08.me",
       "custom_domain": true
+    },
+    {
+      "pattern": "stack.realsid08.me",
+      "custom_domain": true
     }
   ],
   "observability": {
@@ -35,7 +39,6 @@
       "head_sampling_rate": 1
     }
   },
-  "account_id": "a948d7fb82122c0f6f00bec3a43585b1",
   "browser": {
     "binding": "BROWSER",
     "remote": true

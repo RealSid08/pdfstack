@@ -50,13 +50,13 @@ jobs:
 
   deploy:
     name: Deploy production
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.repository == 'RealSid08/pdfstack' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: production
-      url: https://pdf.realsid08.me
+      url: https://stack.realsid08.me
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -77,4 +77,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --tag "$GITHUB_SHA" --message "GitHub Actions $GITHUB_RUN_ID"
       - name: Verify production health, UI, and telemetry
-        run: node scripts/verify-deploy.mjs
+        run: |
+          node scripts/verify-deploy.mjs https://stack.realsid08.me
+          node scripts/verify-deploy.mjs https://pdf.realsid08.me
