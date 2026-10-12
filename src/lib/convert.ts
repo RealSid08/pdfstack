@@ -152,7 +152,7 @@ export async function mergeAll(items: Item[], title: string): Promise<Uint8Array
   out.setProducer("pdf.realsid08.me");
   out.setCreator("pdf.realsid08.me");
   for (const it of items) {
-    if (!it.pdf) continue;
+    if (it.status !== "ready" || !it.pdf) continue;
     const src = await PDFDocument.load(it.pdf, { ignoreEncryption: true });
     const pages = await out.copyPages(src, src.getPageIndices());
     for (const p of pages) out.addPage(p);
