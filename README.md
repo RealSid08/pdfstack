@@ -1,6 +1,6 @@
 # Stack: any file to PDF
 
-A mobile and desktop converter at **https://pdf.realsid08.me**. Add files, reorder them, and download one combined PDF. No account needed.
+A mobile and desktop converter at **https://stack.realsid08.me** (also available at https://pdf.realsid08.me). Add files, reorder them, and download one combined PDF. No account needed.
 
 Everything is hosted on Cloudflare. The browser prepares images and existing PDFs, while a stateless Worker converts documents with Cloudflare Browser Rendering. The final PDF is merged on the user's device. Document contents are not saved in a database or bucket.
 
@@ -33,3 +33,19 @@ See [API contract](docs/API.md) for endpoints and [deployment runbook](docs/DEPL
 - Anonymous product events contain event names, numeric counts and timings, and fixed categories. They do not contain filenames or document contents. Cloudflare observability is configured in the deployment runbook.
 
 Not every arbitrary binary format has a printable representation. The capabilities endpoint and conversion errors define current support; legacy and preview-based formats have documented fidelity limits.
+
+## Open source
+
+Stack is released under the [MIT license](LICENSE). The GitHub repository is
+[pdfstack](https://github.com/RealSid08/pdfstack); the product name is Stack.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and pull requests,
+[SECURITY.md](SECURITY.md) for private vulnerability reporting, and our
+[Code of Conduct](CODE_OF_CONDUCT.md) before participating.
+
+Deployment uses your own Cloudflare account. Set `CLOUDFLARE_ACCOUNT_ID`, replace
+the custom domains in `wrangler.jsonc` with domains you own, and authenticate
+Wrangler. Browser Rendering uses account quota even during local development.
+See [deployment instructions](docs/DEPLOY.md) for details and limits.
+
+Third-party packages retain their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

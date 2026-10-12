@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible problem in Stack.
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic files only. Do not attach private documents or credentials.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS, file format and app URL or commit
+    validations:
+      required: true

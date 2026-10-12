@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-const origin = 'https://pdf.realsid08.me';
+const origin = process.argv[2] || 'https://stack.realsid08.me';
 const get = async (path, init) => {
   const response = await fetch(origin + path, { ...init, signal: AbortSignal.timeout(20000) });
   assert.ok(response.ok, `${path}: HTTP ${response.status}`);

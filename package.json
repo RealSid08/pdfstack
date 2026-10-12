@@ -1,12 +1,12 @@
 {
-  "name": "pdf-realsid",
+  "name": "pdfstack",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev --port 8787",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/prepare-notices.mjs",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "pnpm build && wrangler deploy",
@@ -51,6 +51,16 @@
   },
   "packageManager": "pnpm@12.10.1",
   "engines": {
-    "node": ">=24"
+    "node": ">=26 <27"
+  },
+  "license": "MIT",
+  "description": "Stack: combine images, PDFs, and documents into one PDF with a stateless Cloudflare converter.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RealSid08/pdfstack.git"
+  },
+  "homepage": "https://stack.realsid08.me",
+  "bugs": {
+    "url": "https://github.com/RealSid08/pdfstack/issues"
   }
 }
