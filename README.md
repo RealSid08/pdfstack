@@ -1,32 +1,35 @@
-# React + TypeScript + Vite
+# Stack: any file to PDF
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A mobile and desktop converter at **https://pdf.realsid08.me**. Add files, reorder them, and download one combined PDF. No account needed.
 
-Currently, two official plugins are available:
+Everything is hosted on Cloudflare. The browser prepares images and existing PDFs, while a stateless Worker converts documents with Cloudflare Browser Rendering. The final PDF is merged on the user's device. Document contents are not saved in a database or bucket.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Development
 
-## React Compiler
+Use the runtime in `.nvmrc` and pnpm version in `package.json`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm dev:worker
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+In a second terminal, run `pnpm dev` for frontend development. Its `/api` requests proxy to the Worker on port 8787. Remote Browser Rendering requires existing Wrangler authentication and uses account quota.
+
+```sh
+pnpm lint
+pnpm deploy
+node worker/verify-live.mjs
+```
+
+See [API contract](docs/API.md) for endpoints and [deployment runbook](docs/DEPLOY.md) for supported formats, conversion fidelity, Cloudflare resources, verification evidence, limits and operations.
+
+## Product behavior
+
+- Multi-file upload, drag or keyboard reordering, thumbnails, removal, rotation for images/PDFs, and a custom output name.
+- A4, Letter, and image-fit sizing. Original PDF page dimensions are preserved.
+- Images and PDFs are prepared locally, including HEIC and TIFF decoding loaded on demand.
+- Documents are queued sequentially with bounded retry for a busy conversion service. Downloads wait until the queue finishes; failed files are explicitly counted as skipped.
+- Anonymous product events contain event names, numeric counts and timings, and fixed categories. They do not contain filenames or document contents. Cloudflare observability is configured in the deployment runbook.
+
+Not every arbitrary binary format has a printable representation. The capabilities endpoint and conversion errors define current support; legacy and preview-based formats have documented fidelity limits.
