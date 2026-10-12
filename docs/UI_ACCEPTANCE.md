@@ -6,7 +6,7 @@ Verified the deployed HTTPS app at `https://pdf.realsid08.me` using the thread's
 - Mixed upload: PNG, three-page PDF, HEIC and TIFF. All four prepared successfully, six total pages.
 - Keyboard drag reordering moved the original PDF before the PNG. The downloaded artifact was 4,859,686 bytes; Poppler reported six pages and extracted the three original PDF page markers first, matching the requested order.
 - Desktop viewport: 1440 × 900, with dark appearance. Theme variables and computed foreground/background colors verified after transitions settled.
-- Product telemetry: page view, files added and file-ready browser requests returned 204 from production `/api/events`. Download and reordering events are also emitted. Backend ingestion verification is described in the deployment runbook.
+- Product telemetry: page view, files added and file-ready browser requests returned 204 from production `/api/events`. Download and reordering events are also emitted. Wrangler tail also captured this browser's `page_view`, `files_added`, four `file_ready` events, `files_reordered`, `pdf_downloaded` and `files_cleared`, confirming ingestion rather than only endpoint acceptance.
 
 Local controlled browser checks used mocked conversion responses to exercise rare queue paths:
 
