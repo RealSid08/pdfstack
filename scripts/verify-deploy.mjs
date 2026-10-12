@@ -16,6 +16,7 @@ assert.match(html, /Any file to PDF/);
 const script = html.match(/src="([^"]+\.js)"/);
 assert.ok(script, 'App JavaScript entry must exist');
 await get(script[1]);
-const event = await get('/api/events', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'page_view', viewport: 'desktop' }) });
-assert.equal(event.status, 204);
+// Probe validation without recording a synthetic user visit on every deploy.
+const event = await fetch(origin + '/api/events', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify({ event: 'deployment_probe' }), signal: AbortSignal.timeout(20000) });
+assert.equal(event.status, 400);
 console.log(JSON.stringify({ ok: true, origin, deploymentVersion: health.version }));
