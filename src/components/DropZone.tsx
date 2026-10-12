@@ -33,7 +33,7 @@ export function DropZone({ onFiles, compact, hint }: Props) {
         <button
           type="button"
           onClick={open}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line bg-card/60 px-4 py-4 text-sm font-medium text-muted transition hover:border-accent hover:text-accent active:scale-[.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-card/60 px-4 py-4 text-sm font-medium text-muted transition hover:border-accent hover:bg-card hover:text-accent active:scale-[.99]"
         >
           <Plus className="size-4" /> Add more files
         </button>
@@ -47,18 +47,20 @@ export function DropZone({ onFiles, compact, hint }: Props) {
       <button
         type="button"
         onClick={open}
-        className="group pop flex min-h-[38vh] w-full flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-line bg-card/70 px-6 py-12 text-center shadow-card transition hover:border-accent hover:bg-card active:scale-[.995] sm:min-h-[42vh]"
+        className="group pop flex min-h-[30vh] w-full flex-col items-center justify-center gap-3.5 rounded-3xl border-2 border-dashed border-line bg-card/70 px-6 py-9 text-center shadow-card transition hover:border-accent hover:bg-card active:scale-[.995] sm:min-h-[34vh]"
       >
-        <span className="grid size-16 place-items-center rounded-2xl bg-accent-soft text-accent transition group-hover:scale-105">
-          <Upload className="size-7" strokeWidth={2} />
+        <span className="grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent shadow-xs transition group-hover:scale-105">
+          <Upload className="size-6" strokeWidth={2.2} />
         </span>
-        <span className="space-y-1.5">
-          <span className="block text-xl font-semibold tracking-tight sm:text-2xl">
-            <span className="sm:hidden">Tap to add files</span>
+        <div className="space-y-1">
+          <span className="block text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+            <span className="sm:hidden">Tap to choose files</span>
             <span className="hidden sm:inline">Drop files here or click to browse</span>
           </span>
-          <span className="block text-sm text-muted">Images, documents, spreadsheets, presentations and more. Mix file types in one PDF.</span>
-        </span>
+          <span className="block text-xs text-muted sm:text-sm">
+            PDFs, images, Word docs, spreadsheets, or paste from clipboard
+          </span>
+        </div>
         {hint}
       </button>
     </>

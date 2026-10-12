@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { DropZone } from "./components/DropZone";
 import { FileList } from "./components/FileList";
 import { OutputBar } from "./components/OutputBar";
+import { WorkflowSteps } from "./components/WorkflowSteps";
 import { useItems } from "./hooks/useItems";
 import { loadCapabilities } from "./lib/capabilities";
 import { mergeAll } from "./lib/convert";
@@ -21,7 +22,7 @@ export default function App() {
   }, []);
 
   const { items, pageSize, setPageSize, addFiles, remove, clear, move, retry, rotate } = useItems(caps);
-  const [filename, setFilename] = useState("");
+  const [customFilename, setCustomFilename] = useState("");
   const [touchedName, setTouchedName] = useState(false);
   const [building, setBuilding] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -29,10 +30,12 @@ export default function App() {
   const dragDepth = useRef(0);
 
   // Default output name follows the first file until the user edits it.
-  useEffect(() => {
-    if (touchedName) return;
-    setFilename(items.length ? (items.length === 1 ? stripExt(items[0].name) : `${stripExt(items[0].name)} + ${items.length - 1} more`) : "");
-  }, [items, touchedName]);
+  const defaultFilename = useMemo(() => {
+    if (!items.length) return "";
+    return items.length === 1 ? stripExt(items[0].name) : `${stripExt(items[0].name)} + ${items.length - 1} more`;
+  }, [items]);
+
+  const activeFilename = touchedName ? customFilename : defaultFilename;
 
   const stats = useMemo(() => {
     const ready = items.filter((i) => i.status === "ready");
@@ -45,7 +48,7 @@ export default function App() {
   }, [items]);
 
   const build = useCallback(async (): Promise<File | null> => {
-    const name = safeFilename(filename);
+    const name = safeFilename(activeFilename);
     setBuilding(true);
     try {
       const bytes = await mergeAll(items, stripExt(name));
@@ -57,7 +60,7 @@ export default function App() {
     } finally {
       setBuilding(false);
     }
-  }, [items, filename]);
+  }, [items, activeFilename]);
 
   const onDownload = async () => {
     const f = await build();
@@ -133,27 +136,34 @@ export default function App() {
         {empty ? (
           <section className="pt-4 sm:pt-8">
             <div className="mb-6 text-center">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Any file to PDF</h1>
-              <p className="mx-auto mt-3 max-w-lg text-sm text-muted sm:text-base">Upload your files, arrange them in any order, and download one PDF. Free, with no account needed.</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+                Combine files into one PDF
+              </h1>
+              <p className="mx-auto mt-2.5 max-w-md text-sm text-muted sm:text-base">
+                Drop your files, arrange the order, and download a single merged PDF.
+              </p>
             </div>
+
             <DropZone onFiles={addFiles} />
-            <ul className="mx-auto mt-6 grid max-w-xl grid-cols-1 gap-x-6 gap-y-2 text-sm text-muted sm:grid-cols-3 sm:text-center">
-              <li><strong className="font-medium text-ink">Drop or paste</strong> any number of files.</li>
-              <li><strong className="font-medium text-ink">Drag to order</strong> them the way you want.</li>
-              <li><strong className="font-medium text-ink">Download</strong> one PDF. That's it.</li>
-            </ul>
-            <p className="mt-8 text-center text-xs text-muted">
-              Photos and PDFs never leave your device. Documents like Word and Excel are converted on our server and deleted immediately.
+
+            <WorkflowSteps />
+
+            <p className="mt-8 text-center text-xs leading-relaxed text-muted">
+              Images and PDFs process locally on your device. Office documents are converted in memory by a stateless Cloudflare Worker and never stored.
             </p>
           </section>
         ) : (
           <section className="pt-2 sm:pt-4">
             <div className="mb-3 flex items-center justify-between">
-              <h1 className="text-base font-semibold tracking-tight">
-                {items.length} {items.length === 1 ? "file" : "files"}
-                <span className="ml-2 hidden text-sm font-normal text-muted sm:inline">Drag the handle to reorder</span>
+              <h1 className="text-base font-semibold tracking-tight text-ink">
+                {items.length} {items.length === 1 ? "file in stack" : "files in stack"}
+                <span className="ml-2 hidden text-xs font-normal text-muted sm:inline">Drag cards to change order</span>
               </h1>
-              <button type="button" onClick={clear} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted hover:bg-card hover:text-danger">
+              <button
+                type="button"
+                onClick={clear}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted transition hover:bg-card hover:text-danger"
+              >
                 <Trash2 className="size-3.5" /> Clear all
               </button>
             </div>
@@ -167,10 +177,10 @@ export default function App() {
               pageCount={stats.pages}
               pending={stats.pending}
               errors={stats.errors}
-              filename={filename}
+              filename={activeFilename}
               onFilename={(v) => {
                 setTouchedName(true);
-                setFilename(v);
+                setCustomFilename(v);
               }}
               pageSize={pageSize}
               onPageSize={setPageSize}
@@ -182,15 +192,16 @@ export default function App() {
           </section>
         )}
       </main>
-      <footer className="mx-auto w-full max-w-3xl px-4 pb-6 text-center text-xs text-muted sm:px-6">
-        Free, no account, no files stored. Built on Cloudflare.
+
+      <footer className="mx-auto mt-auto w-full max-w-3xl px-4 py-6 text-center text-xs text-muted sm:px-6">
+        Free and open source · No accounts · No files stored
       </footer>
 
       {dragOver && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-accent/10 p-4 backdrop-blur-[2px]">
           <div className="rounded-3xl border-2 border-dashed border-accent bg-card px-10 py-8 text-center shadow-lift">
-            <p className="text-xl font-semibold">Drop to add</p>
-            <p className="mt-1 text-sm text-muted">Files go to the end of the list</p>
+            <p className="text-xl font-semibold text-ink">Drop to add</p>
+            <p className="mt-1 text-sm text-muted">Files go to the end of the stack</p>
           </div>
         </div>
       )}
