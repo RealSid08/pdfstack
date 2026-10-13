@@ -12,7 +12,7 @@ const capabilities = await (await get('/api/capabilities')).json();
 assert.ok(capabilities.serverExtensions.includes('docx'));
 assert.equal(capabilities.textFallback, true);
 const html = await (await get('/')).text();
-assert.match(html, /Any file to PDF/);
+assert.match(html, /<title>Stack · Combine files into one PDF<\/title>/);
 const script = html.match(/src="([^"]+\.js)"/);
 assert.ok(script, 'App JavaScript entry must exist');
 await get(script[1]);
