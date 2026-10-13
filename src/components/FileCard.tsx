@@ -16,11 +16,11 @@ interface Props {
 
 function KindIcon({ item }: { item: Item }) {
   const cls = "size-6";
-  if (item.route === "image") return <ImageIcon className={cls} />;
-  if (item.route === "pdf") return <FileText className={cls} />;
-  if (["xlsx", "xls", "csv", "ods"].includes(item.ext)) return <Table2 className={cls} />;
-  if (["docx", "doc", "odt", "rtf", "md", "txt"].includes(item.ext)) return <FileType2 className={cls} />;
-  return <FileIcon className={cls} />;
+  if (item.route === "image") return <ImageIcon className={`${cls} text-amber-500`} />;
+  if (item.route === "pdf") return <FileText className={`${cls} text-accent`} />;
+  if (["xlsx", "xls", "csv", "ods"].includes(item.ext)) return <Table2 className={`${cls} text-emerald-500`} />;
+  if (["docx", "doc", "odt", "rtf", "md", "txt"].includes(item.ext)) return <FileType2 className={`${cls} text-blue-500`} />;
+  return <FileIcon className={`${cls} text-muted`} />;
 }
 
 export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMove }: Props) {
@@ -28,12 +28,13 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
   const style = { transform: CSS.Translate.toString(transform), transition };
   const busy = item.status === "converting" || item.status === "queued";
   const canRotate = item.route === "image" || item.route === "pdf";
+  const rotatedDeg = ((item.rotation % 360) + 360) % 360;
 
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className={`pop relative flex items-center gap-3 rounded-2xl border border-line bg-card p-2.5 pr-2 shadow-card sm:gap-4 sm:p-3 ${
+      className={`pop relative flex items-center gap-2.5 rounded-2xl border border-line bg-card p-2.5 shadow-card sm:gap-4 sm:p-3 ${
         isDragging ? "z-10 shadow-lift ring-2 ring-accent/40" : ""
       } ${item.status === "error" ? "border-danger/40" : ""}`}
     >
@@ -43,7 +44,7 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
         {...listeners}
         type="button"
         aria-label={`Drag to reorder ${item.name}`}
-        className="drag-handle -ml-1 grid h-12 w-7 shrink-0 cursor-grab place-items-center rounded-lg text-muted/70 hover:bg-paper hover:text-ink active:cursor-grabbing"
+        className="drag-handle -ml-1 grid h-12 w-8 shrink-0 touch-none cursor-grab place-items-center rounded-lg text-muted/70 hover:bg-paper hover:text-ink active:cursor-grabbing"
       >
         <GripVertical className="size-5" />
       </button>
@@ -67,10 +68,15 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
         <span className="absolute left-1 top-1 rounded-md bg-ink/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-paper">
           {index + 1}
         </span>
+        {rotatedDeg > 0 && (
+          <span className="absolute bottom-1 right-1 rounded bg-ink/80 px-1 py-0.5 text-[9px] font-semibold text-paper">
+            {rotatedDeg}°
+          </span>
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" title={item.name}>
+        <p className="truncate text-sm font-medium text-ink" title={item.name}>
           {item.name}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
@@ -94,7 +100,8 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
           )}
           {busy && (
             <span className="inline-flex items-center gap-1 text-muted">
-              <Loader2 className="size-3.5 animate-spin" /> {item.note ?? (item.route === "server" ? "Converting…" : "Preparing…")}
+              <Loader2 className="size-3.5 animate-spin text-accent" />{" "}
+              {item.note ?? (item.route === "server" ? "Converting..." : "Preparing...")}
             </span>
           )}
           {item.status === "error" && (
@@ -103,7 +110,7 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
               <span>
                 {item.error}{" "}
                 {item.route !== "unsupported" && (
-                  <button type="button" onClick={() => onRetry(item.id)} className="inline-flex items-center gap-0.5 font-medium underline underline-offset-2">
+                  <button type="button" onClick={() => onRetry(item.id)} className="inline-flex items-center gap-0.5 font-medium underline underline-offset-2 hover:opacity-80">
                     <RefreshCw className="size-3" /> Retry
                   </button>
                 )}
@@ -114,7 +121,7 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
-        <div className="hidden flex-col sm:flex">
+        <div className="flex flex-col">
           <IconButton label="Move up" disabled={index === 0} onClick={() => onMove(index, index - 1)}>
             <ChevronUp className="size-4" />
           </IconButton>
@@ -123,7 +130,7 @@ export function FileCard({ item, index, count, onRemove, onRotate, onRetry, onMo
           </IconButton>
         </div>
         {canRotate && (
-          <IconButton label="Rotate 90°" onClick={() => onRotate(item.id)} disabled={busy}>
+          <IconButton label="Rotate 90° clockwise" onClick={() => onRotate(item.id)} disabled={busy}>
             <RotateCw className="size-4" />
           </IconButton>
         )}
@@ -143,8 +150,8 @@ function IconButton({ label, onClick, disabled, danger, children }: { label: str
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`grid size-9 place-items-center rounded-lg text-muted transition hover:bg-paper disabled:opacity-30 disabled:hover:bg-transparent ${
-        danger ? "hover:text-danger" : "hover:text-ink"
+      className={`grid size-9 place-items-center rounded-lg text-muted transition hover:bg-paper active:scale-95 disabled:opacity-30 disabled:hover:bg-transparent ${
+        danger ? "hover:text-danger active:text-danger" : "hover:text-ink active:text-ink"
       }`}
     >
       {children}
